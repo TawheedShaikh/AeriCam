@@ -15,9 +15,12 @@ class CameraApp:
         # Set fullscreen mode
         self.window.attributes('-fullscreen', True)
 
-        # Initialize recording state and timer
+        # Initialize recording state, pause state, and timer
         self.recording = False
+        self.paused = False
         self.recording_start_time = None
+        self.recording_resume_time = None
+        self.paused_duration = datetime.timedelta()
         self.recording_timer_label = None
 
         # Bind the Esc key to the close function
@@ -31,6 +34,9 @@ class CameraApp:
 
         # Bind the "V" key to toggle video recording
         self.window.bind('v', lambda e: self.toggle_recording())
+
+        # Bind the "Space" key to pause/resume recording
+        self.window.bind('<space>', lambda e: self.pause_or_resume_recording())
 
         # Get the screen width and height
         self.screen_width = self.window.winfo_screenwidth()
@@ -73,7 +79,11 @@ class CameraApp:
 
             # Resize the frame while maintaining aspect ratio
             frame = cv2.resize(frame, (new_width, new_height))
-            # Convert the frame to RGB format
+
+            # Add date and time overlay to the frame
+            self.add_date_time_overlay(frame, new_width, new_height)
+
+            # Convert the frame to RGB format for displaying
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             self.photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
 
@@ -93,19 +103,51 @@ class CameraApp:
 
         self.window.after(self.delay, self.update)
 
+    def add_date_time_overlay(self, frame, new_width, new_height):
+        """Add date and time overlay to the frame with consistent size."""
+        current_time = datetime.datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
+
+        # Adjust the font scale dynamically based on frame height
+        font_scale = new_height / 720  # Adjust font scale relative to a 720p height
+
+        # Calculate text size based on dynamic font scale
+        text_size = cv2.getTextSize(current_time, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 2)[0]
+
+        # Position the text dynamically so it fits in the bottom right
+        text_x = new_width - text_size[0] - 10  # Padding of 10 pixels from the right
+        text_y = new_height - 10  # Padding of 10 pixels from the bottom
+
+        # Draw the date and time on the frame
+        cv2.putText(frame, current_time, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), 2, cv2.LINE_AA)
+
     def toggle_recording(self):
         if self.recording:
             # Stop recording
             self.recording = False
-            self.recording_timer_label.place_forget()
+            if self.recording_timer_label:
+                self.recording_timer_label.place_forget()
             self.stop_video_recording()
         else:
             # Start recording
             self.recording = True
+            self.paused = False
             self.recording_start_time = datetime.datetime.now()
+            self.paused_duration = datetime.timedelta()
             self.recording_timer_label = tk.Label(self.window, text="00:00:00", fg="red", font=("Arial", 20), bg="black")
             self.recording_timer_label.place(x=self.screen_width // 2, y=20, anchor="n")
             self.start_video_recording()
+
+    def pause_or_resume_recording(self):
+        if self.recording:
+            if not self.paused:
+                # Pause recording
+                self.paused = True
+                self.recording_resume_time = datetime.datetime.now()
+            else:
+                # Resume recording
+                self.paused = False
+                self.paused_duration += datetime.datetime.now() - self.recording_resume_time
+                self.recording_resume_time = None
 
     def start_video_recording(self):
         # Create directory for saving videos
@@ -130,15 +172,19 @@ class CameraApp:
 
     def record_video(self):
         while self.recording:
-            ret, frame = self.vid.read()
-            if ret:
-                self.out.write(frame)
+            if not self.paused:
+                ret, frame = self.vid.read()
+                if ret:
+                    # Add date and time overlay to the frame before saving to video
+                    self.add_date_time_overlay(frame, self.cam_width, self.cam_height)
+                    self.out.write(frame)
 
     def update_timer(self):
-        # Calculate the elapsed time
-        elapsed_time = datetime.datetime.now() - self.recording_start_time
-        elapsed_str = str(elapsed_time).split('.')[0]  # Format to HH:MM:SS
-        self.recording_timer_label.config(text=elapsed_str)
+        if self.recording_start_time:
+            # Calculate the elapsed time excluding paused durations
+            elapsed_time = datetime.datetime.now() - self.recording_start_time - self.paused_duration
+            elapsed_str = str(elapsed_time).split('.')[0]  # Format to HH:MM:SS
+            self.recording_timer_label.config(text=elapsed_str)
 
     def capture_image(self):
         # Capture the current frame and save it as an image

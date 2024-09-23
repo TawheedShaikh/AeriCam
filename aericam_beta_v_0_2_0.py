@@ -5,6 +5,7 @@ import os
 import datetime
 import subprocess
 import platform
+import threading
 
 class CameraApp:
     def __init__(self, window, window_title):
@@ -14,6 +15,14 @@ class CameraApp:
         # Set fullscreen mode
         self.window.attributes('-fullscreen', True)
 
+        # Initialize recording state, pause state, and timer
+        self.recording = False
+        self.paused = False
+        self.recording_start_time = None
+        self.recording_resume_time = None
+        self.paused_duration = datetime.timedelta()
+        self.recording_timer_label = None
+
         # Bind the Esc key to the close function
         self.window.bind('<Escape>', lambda e: self.close_app())
 
@@ -22,6 +31,12 @@ class CameraApp:
 
         # Bind the "G" key to open the gallery
         self.window.bind('g', lambda e: self.open_gallery())
+
+        # Bind the "V" key to toggle video recording
+        self.window.bind('v', lambda e: self.toggle_recording())
+
+        # Bind the "Space" key to pause/resume recording
+        self.window.bind('<space>', lambda e: self.pause_or_resume_recording())
 
         # Get the screen width and height
         self.screen_width = self.window.winfo_screenwidth()
@@ -64,7 +79,11 @@ class CameraApp:
 
             # Resize the frame while maintaining aspect ratio
             frame = cv2.resize(frame, (new_width, new_height))
-            # Convert the frame to RGB format
+
+            # Add date and time overlay to the frame
+            self.add_date_time_overlay(frame, new_width, new_height)
+
+            # Convert the frame to RGB format for displaying
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             self.photo = ImageTk.PhotoImage(image=Image.fromarray(frame))
 
@@ -79,7 +98,88 @@ class CameraApp:
             # Store the frame for saving when "P" is pressed
             self.current_frame = frame
 
+        if self.recording:
+            self.update_timer()
+
         self.window.after(self.delay, self.update)
+
+    def add_date_time_overlay(self, frame, new_width, new_height):
+        """Add date and time overlay to the frame."""
+        current_time = datetime.datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
+        text_size = cv2.getTextSize(current_time, cv2.FONT_HERSHEY_SIMPLEX, 1, 2)[0]  # Get text size (width, height)
+
+        # Position the text dynamically so it fits in the bottom right
+        text_x = new_width - text_size[0] - 10  # Padding of 10 pixels from the right
+        text_y = new_height - 10  # Padding of 10 pixels from the bottom
+
+        # Draw the date and time on the frame
+        cv2.putText(frame, current_time, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+    def toggle_recording(self):
+        if self.recording:
+            # Stop recording
+            self.recording = False
+            if self.recording_timer_label:
+                self.recording_timer_label.place_forget()
+            self.stop_video_recording()
+        else:
+            # Start recording
+            self.recording = True
+            self.paused = False
+            self.recording_start_time = datetime.datetime.now()
+            self.paused_duration = datetime.timedelta()
+            self.recording_timer_label = tk.Label(self.window, text="00:00:00", fg="red", font=("Arial", 20), bg="black")
+            self.recording_timer_label.place(x=self.screen_width // 2, y=20, anchor="n")
+            self.start_video_recording()
+
+    def pause_or_resume_recording(self):
+        if self.recording:
+            if not self.paused:
+                # Pause recording
+                self.paused = True
+                self.recording_resume_time = datetime.datetime.now()
+            else:
+                # Resume recording
+                self.paused = False
+                self.paused_duration += datetime.datetime.now() - self.recording_resume_time
+                self.recording_resume_time = None
+
+    def start_video_recording(self):
+        # Create directory for saving videos
+        os.makedirs("Gallery/Videos", exist_ok=True)
+
+        # Generate a timestamped filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.video_filename = f"Gallery/Videos/captured_video_{timestamp}.mp4"
+
+        # Define the codec and create a VideoWriter object
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 'mp4v' is the codec for .mp4 files
+        self.out = cv2.VideoWriter(self.video_filename, fourcc, 20.0, (self.cam_width, self.cam_height))
+
+        # Start a separate thread to save video frames
+        self.recording_thread = threading.Thread(target=self.record_video)
+        self.recording_thread.start()
+
+    def stop_video_recording(self):
+        # Stop the recording thread
+        self.out.release()
+        print(f"Video saved as {self.video_filename}")
+
+    def record_video(self):
+        while self.recording:
+            if not self.paused:
+                ret, frame = self.vid.read()
+                if ret:
+                    # Add date and time overlay to the frame before saving to video
+                    self.add_date_time_overlay(frame, self.cam_width, self.cam_height)
+                    self.out.write(frame)
+
+    def update_timer(self):
+        if self.recording_start_time:
+            # Calculate the elapsed time excluding paused durations
+            elapsed_time = datetime.datetime.now() - self.recording_start_time - self.paused_duration
+            elapsed_str = str(elapsed_time).split('.')[0]  # Format to HH:MM:SS
+            self.recording_timer_label.config(text=elapsed_str)
 
     def capture_image(self):
         # Capture the current frame and save it as an image
