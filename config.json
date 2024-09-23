@@ -1,0 +1,8 @@
+{
+  "photo_button": "images/photo_button.png",
+  "video_button": "images/video_button.png",
+  "stop_button": "images/stop_button.png",
+  "pause_button": "images/pause_button.png",
+  "resume_button": "images/resume_button.png",
+  "gallery_button": "images/gallery_button.png"
+}

@@ -1,0 +1,1 @@
+pyinstaller --onefile --name --add-data "images/photo_button.png;images" --add-data "images/video_button.png;images" --add-data "images/stop_button.png;images" --add-data "images/pause_button.png;images" --add-data "images/resume_button.png;images" --add-data "images/gallery_button.png;images" main_og_update2.py
