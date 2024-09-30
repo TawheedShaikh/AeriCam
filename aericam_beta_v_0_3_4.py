@@ -66,11 +66,13 @@ class CameraApp:
         self.window.mainloop()
 
     def load_button_images(self):
-        # Load images for buttons
-        self.photo_img = ImageTk.PhotoImage(Image.open("images/photo.png").resize((50, 50)))
-        self.video_img = ImageTk.PhotoImage(Image.open("images/video.png").resize((50, 50)))
-        self.pause_resume_img = ImageTk.PhotoImage(Image.open("images/pause.png").resize((50, 50)))
-        self.gallery_img = ImageTk.PhotoImage(Image.open("images/gallery.png").resize((50, 50)))
+        # Dynamically resize button images based on screen size
+        button_size = int(self.screen_height * 0.07)  # Set button size to 7% of screen height
+        self.photo_img = ImageTk.PhotoImage(Image.open("images/photo.png").resize((button_size, button_size)))
+        self.video_img = ImageTk.PhotoImage(Image.open("images/video.png").resize((button_size, button_size)))
+        self.pause_resume_img = ImageTk.PhotoImage(Image.open("images/pause.png").resize((button_size, button_size)))
+        self.gallery_img = ImageTk.PhotoImage(Image.open("images/gallery.png").resize((button_size, button_size)))
+        self.close_img = ImageTk.PhotoImage(Image.open("images/close.png").resize((button_size, button_size)))  # Load close button image
 
     def create_buttons(self):
         # Calculate the center-right position for the buttons
@@ -89,6 +91,9 @@ class CameraApp:
 
         self.btn_gallery = tk.Button(self.window, image=self.gallery_img, command=self.open_gallery)
         self.btn_gallery.place(x=button_x, y=button_y + 180)
+
+        self.btn_close = tk.Button(self.window, image=self.close_img, command=self.close_app)  # Close button
+        self.btn_close.place(x=button_x, y=button_y + 270)  # Place below the gallery button
 
     def update(self):
         ret, frame = self.vid.read()
@@ -139,7 +144,7 @@ class CameraApp:
 
     def add_date_time_overlay(self, frame, new_width, new_height):
         current_time = datetime.datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
-        font_scale = new_height / 720
+        font_scale = new_height / 720  # Scale font size relative to screen height
         text_size = cv2.getTextSize(current_time, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 2)[0]
         text_x = new_width - text_size[0] - 10
         text_y = new_height - 10
@@ -151,14 +156,22 @@ class CameraApp:
             if self.recording_timer_label:
                 self.recording_timer_label.place_forget()
             self.stop_video_recording()
+            # Change the button back to "video.png"
+            self.video_img = ImageTk.PhotoImage(Image.open("images/video.png").resize((int(self.screen_height * 0.07), int(self.screen_height * 0.07))))
+            self.btn_video.config(image=self.video_img)
         else:
             self.recording = True
             self.paused = False
             self.recording_start_time = datetime.datetime.now()
             self.paused_duration = datetime.timedelta()
-            self.recording_timer_label = tk.Label(self.window, text="00:00:00", fg="red", font=("Arial", 20), bg="black")
+            # Set font size relative to screen size for the timer
+            font_size = int(self.screen_height * 0.03)
+            self.recording_timer_label = tk.Label(self.window, text="00:00:00", fg="red", font=("Arial", font_size), bg="black")
             self.recording_timer_label.place(x=self.screen_width // 2, y=20, anchor="n")
             self.start_video_recording()
+            # Change the button to "stop.png"
+            self.video_img = ImageTk.PhotoImage(Image.open("images/stop.png").resize((int(self.screen_height * 0.07), int(self.screen_height * 0.07))))
+            self.btn_video.config(image=self.video_img)
 
     def pause_or_resume_recording(self):
         if self.recording:
@@ -166,10 +179,16 @@ class CameraApp:
                 # Resume recording
                 self.paused_duration += datetime.datetime.now() - self.pause_start_time
                 self.paused = False
+                # Change the button back to "pause.png"
+                self.pause_resume_img = ImageTk.PhotoImage(Image.open("images/pause.png").resize((int(self.screen_height * 0.07), int(self.screen_height * 0.07))))
+                self.btn_pause_resume.config(image=self.pause_resume_img)
             else:
                 # Pause recording
                 self.paused = True
                 self.pause_start_time = datetime.datetime.now()
+                # Change the button to "resume.png"
+                self.pause_resume_img = ImageTk.PhotoImage(Image.open("images/resume.png").resize((int(self.screen_height * 0.07), int(self.screen_height * 0.07))))
+                self.btn_pause_resume.config(image=self.pause_resume_img)
 
     def start_video_recording(self):
         os.makedirs("Gallery/Videos", exist_ok=True)
@@ -178,67 +197,41 @@ class CameraApp:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         self.out = cv2.VideoWriter(self.video_filename, fourcc, 20.0, (self.cam_width, self.cam_height))
 
-        self.recording_thread = threading.Thread(target=self.record_video)
-        self.recording_thread.start()
-
     def stop_video_recording(self):
-        self.recording = False
-        self.recording_thread.join()  # Ensure the recording thread has finished
         self.out.release()
-        print(f"Video saved as {self.video_filename}")
-
-    def record_video(self):
-        last_frame_time = datetime.datetime.now()
-
-        while self.recording:
-            if not self.paused:
-                ret, frame = self.vid.read()
-                if ret:
-                    # Calculate the time since the last frame
-                    now = datetime.datetime.now()
-                    time_diff = (now - last_frame_time).total_seconds()
-
-                    # Maintain the frame rate by skipping writing during the pause
-                    if time_diff >= 1 / 20.0:  # 20 frames per second (FPS)
-                        self.add_date_time_overlay(frame, self.cam_width, self.cam_height)
-                        self.out.write(frame)
-                        last_frame_time = now
 
     def update_timer(self):
-        if self.recording_start_time and not self.paused:
-            # Only update timer if not paused
+        if self.recording and not self.paused:
             elapsed_time = datetime.datetime.now() - self.recording_start_time - self.paused_duration
-            elapsed_str = str(elapsed_time).split('.')[0]
-            self.recording_timer_label.config(text=elapsed_str)
-        elif self.paused:
-            # Keep the timer showing the same paused time
-            elapsed_time = self.pause_start_time - self.recording_start_time - self.paused_duration
-            elapsed_str = str(elapsed_time).split('.')[0]
-            self.recording_timer_label.config(text=elapsed_str)
+            hours, remainder = divmod(elapsed_time.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            timer_text = f"{hours:02}:{minutes:02}:{seconds:02}"
+            self.recording_timer_label.config(text=timer_text)
+
+            # Write the frame to the output file
+            ret, frame = self.vid.read()
+            if ret:
+                self.out.write(frame)
 
     def capture_image(self):
-        if hasattr(self, 'current_frame'):
-            os.makedirs("Gallery/Images", exist_ok=True)
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"Gallery/Images/captured_image_{timestamp}.jpg"
-            image = Image.fromarray(self.current_frame)
-            image.save(filename)
-            print(f"Image saved as {filename}")
+        os.makedirs("Gallery/Photos", exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_filename = f"Gallery/Photos/captured_image_{timestamp}.jpg"
+        cv2.imwrite(image_filename, cv2.cvtColor(self.current_frame, cv2.COLOR_RGB2BGR))
 
     def open_gallery(self):
         if platform.system() == "Windows":
-            subprocess.Popen(f'explorer "{os.path.realpath("Gallery")}"')
+            subprocess.run(['explorer', 'Gallery'])
         elif platform.system() == "Linux":
-            subprocess.Popen(["xdg-open", "Gallery"])
+            subprocess.run(['xdg-open', 'Gallery'])
         elif platform.system() == "Darwin":  # macOS
-            subprocess.Popen(["open", "Gallery"])
+            subprocess.run(['open', 'Gallery'])
 
     def close_app(self):
-        if self.vid.isOpened():
-            self.vid.release()
+        self.vid.release()
         self.window.quit()
 
-# Create a window and pass it to the CameraApp class
+
 if __name__ == "__main__":
     root = tk.Tk()
-    app = CameraApp(root, "Live Camera Feed - Fullscreen Mode")
+    app = CameraApp(root, "Camera App")

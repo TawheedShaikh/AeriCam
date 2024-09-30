@@ -66,11 +66,12 @@ class CameraApp:
         self.window.mainloop()
 
     def load_button_images(self):
-        # Load images for buttons
-        self.photo_img = ImageTk.PhotoImage(Image.open("images/photo.png").resize((50, 50)))
-        self.video_img = ImageTk.PhotoImage(Image.open("images/video.png").resize((50, 50)))
-        self.pause_resume_img = ImageTk.PhotoImage(Image.open("images/pause.png").resize((50, 50)))
-        self.gallery_img = ImageTk.PhotoImage(Image.open("images/gallery.png").resize((50, 50)))
+        # Dynamically resize button images based on screen size
+        button_size = int(self.screen_height * 0.07)  # Set button size to 7% of screen height
+        self.photo_img = ImageTk.PhotoImage(Image.open("images/photo.png").resize((button_size, button_size)))
+        self.video_img = ImageTk.PhotoImage(Image.open("images/video.png").resize((button_size, button_size)))
+        self.pause_resume_img = ImageTk.PhotoImage(Image.open("images/pause.png").resize((button_size, button_size)))
+        self.gallery_img = ImageTk.PhotoImage(Image.open("images/gallery.png").resize((button_size, button_size)))
 
     def create_buttons(self):
         # Calculate the center-right position for the buttons
@@ -139,7 +140,7 @@ class CameraApp:
 
     def add_date_time_overlay(self, frame, new_width, new_height):
         current_time = datetime.datetime.now().strftime("%d/%m/%Y - %H:%M:%S")
-        font_scale = new_height / 720
+        font_scale = new_height / 720  # Scale font size relative to screen height
         text_size = cv2.getTextSize(current_time, cv2.FONT_HERSHEY_SIMPLEX, font_scale, 2)[0]
         text_x = new_width - text_size[0] - 10
         text_y = new_height - 10
@@ -156,7 +157,9 @@ class CameraApp:
             self.paused = False
             self.recording_start_time = datetime.datetime.now()
             self.paused_duration = datetime.timedelta()
-            self.recording_timer_label = tk.Label(self.window, text="00:00:00", fg="red", font=("Arial", 20), bg="black")
+            # Set font size relative to screen size for the timer
+            font_size = int(self.screen_height * 0.03)
+            self.recording_timer_label = tk.Label(self.window, text="00:00:00", fg="red", font=("Arial", font_size), bg="black")
             self.recording_timer_label.place(x=self.screen_width // 2, y=20, anchor="n")
             self.start_video_recording()
 
@@ -205,40 +208,30 @@ class CameraApp:
                         last_frame_time = now
 
     def update_timer(self):
-        if self.recording_start_time and not self.paused:
-            # Only update timer if not paused
+        if self.recording_start_time:
             elapsed_time = datetime.datetime.now() - self.recording_start_time - self.paused_duration
-            elapsed_str = str(elapsed_time).split('.')[0]
-            self.recording_timer_label.config(text=elapsed_str)
-        elif self.paused:
-            # Keep the timer showing the same paused time
-            elapsed_time = self.pause_start_time - self.recording_start_time - self.paused_duration
             elapsed_str = str(elapsed_time).split('.')[0]
             self.recording_timer_label.config(text=elapsed_str)
 
     def capture_image(self):
-        if hasattr(self, 'current_frame'):
-            os.makedirs("Gallery/Images", exist_ok=True)
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"Gallery/Images/captured_image_{timestamp}.jpg"
-            image = Image.fromarray(self.current_frame)
-            image.save(filename)
-            print(f"Image saved as {filename}")
+        os.makedirs("Gallery/Photos", exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"Gallery/Photos/captured_image_{timestamp}.jpg"
+        image = Image.fromarray(self.current_frame)
+        image.save(filename)
+        print(f"Image saved as {filename}")
 
     def open_gallery(self):
-        if platform.system() == "Windows":
-            subprocess.Popen(f'explorer "{os.path.realpath("Gallery")}"')
-        elif platform.system() == "Linux":
-            subprocess.Popen(["xdg-open", "Gallery"])
-        elif platform.system() == "Darwin":  # macOS
-            subprocess.Popen(["open", "Gallery"])
+        if platform.system() == "Linux":
+            subprocess.run(["xdg-open", "Gallery"])
+        elif platform.system() == "Windows":
+            subprocess.run(["explorer", "Gallery"])
+        else:
+            subprocess.run(["open", "Gallery"])
 
     def close_app(self):
-        if self.vid.isOpened():
-            self.vid.release()
         self.window.quit()
 
-# Create a window and pass it to the CameraApp class
 if __name__ == "__main__":
     root = tk.Tk()
-    app = CameraApp(root, "Live Camera Feed - Fullscreen Mode")
+    app = CameraApp(root, "Camera Application")
