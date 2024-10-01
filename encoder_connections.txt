@@ -1,0 +1,7 @@
+Hardware Connections:
+
+Encoder:	| 	Raspberry Pi GPIO:
+VCC		| 	5V
+GND		| 	GND
+Output(A)	| 	GPIO 17
+Output(B)	| 	GPIO 27

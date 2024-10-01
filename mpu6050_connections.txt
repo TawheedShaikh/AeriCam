@@ -1,0 +1,7 @@
+Hardware Connections:
+
+MPU6050:	| 	Raspberry Pi GPIO:
+VCC		| 	3.3V
+GND		| 	GND
+SCL		|	GPIO 3
+SDA		| 	GPIO 2
